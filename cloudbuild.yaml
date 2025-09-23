@@ -1,35 +1,31 @@
-steps:
-# Step 1: Build Docker image
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID', '.']
-
-# Step 2: Push Docker image to Artifact Registry
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID']
-
-# Step 3: Create new instance template with COS + container
-- name: 'gcr.io/cloud-builders/gcloud'
-  args:
-    [
-      'compute', 'instance-templates', 'create', 'web-template-$BUILD_ID',
-      '--machine-type=e2-micro',
-      '--tags=http-server',
-      '--image-family=cos-stable',
-      '--image-project=cos-cloud',
-      '--boot-disk-size=10GB',
-      '--metadata',
-      'gce-container-declaration=spec:\n  containers:\n    - name: web-app\n      image: us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID\n      stdin: false\n      tty: false\n  restartPolicy: Always'
-    ]
-
-# Step 4: Roll out the new template to MIG
-- name: 'gcr.io/cloud-builders/gcloud'
-  args:
-    [
-      'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update',
-      'web-1-mig',
-      '--version', 'template=web-template-$BUILD_ID',
-      '--zone=us-central1-a'
-    ]
-
 options:
   logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # Step 1: Build Docker image with commit SHA tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA',
+        '.'
+      ]
+
+  # Step 2: Push Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'push',
+        'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
+      ]
+
+  # Step 3: Deploy via bash script
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - './deploy.sh'
+      - "$COMMIT_SHA"   # Pass commit SHA as argument
+
+images:
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
