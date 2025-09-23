@@ -1,31 +1,22 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 steps:
-  # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       [
         'build',
         '-t',
-        'us-central1.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA',
+        'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/web-app:$COMMIT_SHA',
         '.'
       ]
-
-  # Step 2: Push Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       [
         'push',
-        'us-central1.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
+        'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/web-app:$COMMIT_SHA'
       ]
-
-  # Step 3: Deploy via script
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
-      - './deploy.sh'
-      - "$COMMIT_SHA"
+      ['deploy.sh', '$COMMIT_SHA']
 
 images:
-  - 'us-central1.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/web-app:$COMMIT_SHA'
