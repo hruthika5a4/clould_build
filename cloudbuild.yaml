@@ -8,7 +8,7 @@ steps:
       [
         'build',
         '-t',
-        'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA',
+        'us-central1-a.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA',
         '.'
       ]
 
@@ -17,7 +17,7 @@ steps:
     args:
       [
         'push',
-        'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
+        'us-central1-a.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
       ]
 
   # Step 3: Deploy via bash script
@@ -28,4 +28,4 @@ steps:
       - "$COMMIT_SHA"   # Pass commit SHA as argument
 
 images:
-  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
+  - 'us-central1-a.pkg.dev/$PROJECT_ID/artifact-repo/web-app:$COMMIT_SHA'
