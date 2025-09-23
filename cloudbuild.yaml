@@ -1,0 +1,19 @@
+steps:
+# Step 1: Create new instance template
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    [
+      'compute', 'instance-templates', 'create', 'web-template-$BUILD_ID',
+      '--metadata-from-file', 'startup-script=startup.sh',
+      '--machine-type=e2-micro', '--tags=http-server'
+    ]
+
+# Step 2: Start rolling update on MIG
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    [
+      'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update',
+      'web-1-mig',
+      '--version', 'template=web-template-$BUILD_ID',
+      '--zone=us-central1-a'
+    ]
