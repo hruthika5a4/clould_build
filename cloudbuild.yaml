@@ -17,3 +17,6 @@ steps:
       '--version', 'template=web-template-$BUILD_ID',
       '--zone=us-central1-a'
     ]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
