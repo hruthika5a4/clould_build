@@ -1,14 +1,26 @@
 steps:
-# Step 1: Create new instance template
+# Step 1: Build Docker image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID', '.']
+
+# Step 2: Push image to Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID']
+
+# Step 3: Create instance template with Container-Optimized OS
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
     [
       'compute', 'instance-templates', 'create', 'web-template-$BUILD_ID',
-      '--metadata-from-file', 'startup-script=startup.sh',
-      '--machine-type=e2-micro', '--tags=http-server'
+      '--machine-type=e2-micro',
+      '--tags=http-server',
+      '--image-family=cos-stable',
+      '--image-project=cos-cloud',
+      '--boot-disk-size=10GB',
+      '--metadata', 'gce-container-declaration=spec:\n  containers:\n    - name: web-app\n      image: us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID\n      stdin: false\n      tty: false\n  restartPolicy: Always'
     ]
 
-# Step 2: Start rolling update on MIG
+# Step 4: Roll out MIG update
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
     [
