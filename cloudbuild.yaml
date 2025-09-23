@@ -3,11 +3,11 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID', '.']
 
-# Step 2: Push Docker image
+# Step 2: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID']
 
-# Step 3: Create instance template (COS + container)
+# Step 3: Create new instance template with COS + container
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
     [
@@ -21,7 +21,7 @@ steps:
       'gce-container-declaration=spec:\n  containers:\n    - name: web-app\n      image: us-central1-docker.pkg.dev/$PROJECT_ID/web-repo/web-app:$BUILD_ID\n      stdin: false\n      tty: false\n  restartPolicy: Always'
     ]
 
-# Step 4: Roll out to MIG
+# Step 4: Roll out the new template to MIG
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
     [
