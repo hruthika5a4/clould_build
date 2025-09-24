@@ -2,7 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-# Step 1: Build Docker image
+# Step 1: Build and tag Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
     [
@@ -19,79 +19,62 @@ steps:
       'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
     ]
 
-# Step 3: Create instance template
+# Step 3: Create instance template for new version
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID..."
+      echo "Creating instance template web-template-$BUILD_ID"
       gcloud beta compute instance-templates create-with-container web-template-$BUILD_ID \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green deployment
+# Step 4: Blue/green traffic shift
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      # Variables internal to script
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
-      LB_BACKEND="web-lb-backend"
+      LB_BACKEND="web-map"
       ZONE="us-central1-a"
 
       echo "Creating Green MIG $GREEN_MIG..."
       gcloud compute instance-groups managed create "$GREEN_MIG" \
-          --base-instance-name web \
-          --size 2 \
-          --template web-template-$BUILD_ID \
-          --zone $ZONE \
-          --health-check web-mig-hc \
-          --initial-delay 30 \
-          --quiet
+        --base-instance-name web \
+        --size 2 \
+        --template web-template-$BUILD_ID \
+        --zone $ZONE \
+        --health-check web-mig-hc \
+        --initial-delay 30 \
+        --quiet
 
-      echo "Waiting for all Green MIG instances to be RUNNING and HEALTHY..."
-      while true; do
-          STATUS=$(gcloud compute instance-groups managed list-instances "$GREEN_MIG" \
-                    --zone $ZONE \
-                    --format="value(status,instance,version.instanceTemplate)" | grep -v TERMINATED)
-          ALL_HEALTHY=true
-          while read -r line; do
-              STATE=$(echo $line | awk '{print $1}')
-              if [ "$STATE" != "RUNNING" ]; then
-                  ALL_HEALTHY=false
-                  break
-              fi
-          done <<< "$STATUS"
-          if [ "$ALL_HEALTHY" = true ]; then
-              echo "All instances are RUNNING."
-              break
-          fi
-          echo "Waiting 10s..."
-          sleep 10
-      done
+      echo "Waiting for Green MIG to stabilize..."
+      gcloud compute instance-groups managed wait-until-stable "$GREEN_MIG" --zone $ZONE
 
-      echo "Switching LB backend to Green MIG only..."
+      echo "Switching load balancer backend to Green MIG..."
       gcloud compute backend-services update "$LB_BACKEND" \
-          --global \
-          --instance-group "$GREEN_MIG" \
-          --instance-group-zone $ZONE \
-          --quiet
+        --global \
+        --instance-group "$GREEN_MIG" \
+        --instance-group-zone $ZONE \
+        --quiet
 
-      echo "Removing old MIG from LB..."
+      echo "Removing old MIG from load balancer..."
       gcloud compute backend-services update "$LB_BACKEND" \
-          --global \
-          --remove-instance-groups "$OLD_MIG" \
-          --instance-group-zone $ZONE \
-          --quiet
+        --global \
+        --remove-instance-groups "$OLD_MIG" \
+        --instance-group-zone $ZONE \
+        --quiet
 
       echo "Deleting old MIG $OLD_MIG..."
       gcloud compute instance-groups managed delete "$OLD_MIG" \
-          --zone $ZONE \
-          --quiet
+        --zone $ZONE \
+        --quiet
 
 images:
   - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
