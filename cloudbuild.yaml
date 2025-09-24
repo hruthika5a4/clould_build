@@ -31,11 +31,12 @@ steps:
   args:
     - '-c'
     - |
-      # All variables inside the bash script, not top-level YAML
+      # Variables inside the Bash script
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
-      LB_BACKEND="web-lb-backend"
+      LB_BACKEND="web-map"
 
+      # 4a. Create the Green MIG
       echo "Creating Green MIG $GREEN_MIG..."
       gcloud compute instance-groups managed create "$GREEN_MIG" \
           --base-instance-name web \
@@ -46,10 +47,12 @@ steps:
           --initial-delay 30 \
           --quiet
 
+      # 4b. Wait until Green MIG is fully healthy
       echo "Waiting for Green MIG instances to be healthy..."
       gcloud compute instance-groups managed wait-until-stable "$GREEN_MIG" \
           --zone us-central1-a
 
+      # 4c. Switch load balancer backend to Green MIG
       echo "Switching LB backend to Green MIG only..."
       gcloud compute backend-services update "$LB_BACKEND" \
           --global \
@@ -57,13 +60,15 @@ steps:
           --instance-group-zone us-central1-a \
           --quiet
 
-      echo "Removing old MIG from LB..."
+      # 4d. Remove old MIG from backend service
+      echo "Removing old MIG from LB backend..."
       gcloud compute backend-services update "$LB_BACKEND" \
           --global \
           --remove-instance-groups "$OLD_MIG" \
           --instance-group-zone us-central1-a \
           --quiet
 
+      # 4e. Delete the old MIG
       echo "Deleting old MIG $OLD_MIG..."
       gcloud compute instance-groups managed delete "$OLD_MIG" \
           --zone us-central1-a \
