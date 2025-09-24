@@ -1,7 +1,5 @@
-FROM node:18
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 8080
-CMD ["npm", "start"]
+# Use official Apache image
+FROM httpd:2.4
+
+# Copy your index.html to Apache web root
+COPY index.html /usr/local/apache2/htdocs/index.html
