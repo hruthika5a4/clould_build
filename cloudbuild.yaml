@@ -2,12 +2,33 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _ENV: "green"        # blue or green
+  _ENV: "green"        # default, will be auto-detected
   _VERSION: "v1"       # version tag
 
 steps:
-# Step 1: Build Docker image
+# Step 1: Detect current active environment and choose deployment env
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Detect-active-env
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      set -e
+      CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global \
+        --format='value(target)')
+      echo "Current forwarding target: $CURRENT_TARGET"
+      if [[ "$CURRENT_TARGET" == *"blue"* ]]; then
+        echo "Blue is live → deploying to GREEN"
+        DEPLOY_ENV="green"
+      else
+        echo "Green is live → deploying to BLUE"
+        DEPLOY_ENV="blue"
+      fi
+      echo "DEPLOY_ENV=$DEPLOY_ENV" > /workspace/deploy_env.txt
+
+# Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
+  id: Build-image
   args:
     [
       'build',
@@ -15,69 +36,93 @@ steps:
       '.'
     ]
 
-# Step 2: Push Docker image to Artifact Registry
+# Step 3: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
+  id: Push-image
   args:
     [
       'push',
       'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID'
     ]
 
-# Step 3: Create instance template
+# Step 4: Create instance template
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Create-template
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      TEMPLATE_NAME="web-template-${_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Creating instance template: $${TEMPLATE_NAME}"
-      gcloud beta compute instance-templates create-with-container "$${TEMPLATE_NAME}" \
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Creating instance template: $TEMPLATE_NAME"
+      gcloud beta compute instance-templates create-with-container "$TEMPLATE_NAME" \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Rolling update MIG
+# Step 5: Rolling update MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Rolling-update
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      MIG_NAME="web-${_ENV}-mig"
-      TEMPLATE_NAME="web-template-${_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Starting rolling update on MIG: $${MIG_NAME}"
-      gcloud compute instance-groups managed rolling-action start-update "$${MIG_NAME}" \
-        --version template="$${TEMPLATE_NAME}" \
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME="web-${DEPLOY_ENV}-mig"
+      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Starting rolling update on MIG: $MIG_NAME"
+      gcloud compute instance-groups managed rolling-action start-update "$MIG_NAME" \
+        --version template="$TEMPLATE_NAME" \
         --zone=us-central1-a \
         --max-surge=1 \
-        --max-unavailable=1 \
+        --max-unavailable=0 \
         --type=proactive \
         --quiet
 
-# Step 5: Wait for MIG rollout to complete
+# Step 6: Wait for MIG rollout to complete
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Wait-for-rollout
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      MIG_NAME="web-${_ENV}-mig"
-      echo "Waiting for MIG $${MIG_NAME} to finish rollout..."
-      gcloud compute instance-groups managed wait-until-stable "$${MIG_NAME}" \
-        --zone=us-central1-a \
-        --timeout=15m
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME="web-${DEPLOY_ENV}-mig"
+      echo "Waiting for MIG $MIG_NAME to finish rollout..."
+      gcloud compute instance-groups managed wait-until-stable "$MIG_NAME" \
+        --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
-# Step 6: Switch traffic
+# Step 7: Wait for backend health
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Wait-for-backend
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Switching traffic to ${_ENV} environment..."
-      if [ "${_ENV}" == "green" ]; then
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      BACKEND="${DEPLOY_ENV}-backend"
+      echo "Waiting for backend $BACKEND to become healthy..."
+      until gcloud compute backend-services get-health "$BACKEND" --global \
+        | grep -q "HEALTHY"; do
+        echo "Backend not healthy yet, waiting 10s..."
+        sleep 10
+      done
+      echo "Backend $BACKEND healthy ✅"
+
+# Step 8: Switch traffic
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Switch-traffic
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      echo "Switching traffic to $DEPLOY_ENV environment..."
+      if [ "$DEPLOY_ENV" == "green" ]; then
         bash ./switch-to-green.sh
       else
         bash ./switch-to-blue.sh
       fi
-
-
+      echo "Traffic switched ✅"
