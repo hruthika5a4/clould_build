@@ -54,30 +54,18 @@ steps:
         --type=proactive \
         --quiet
 
-# Step 5: Wait for backend health
+# Step 5: Wait for MIG rollout to complete
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      BACKEND="${_ENV}-backend"
-      echo "Waiting for backend $${BACKEND} to become healthy..."
-      while true; do
-        echo "DEBUG: Checking backend $${BACKEND}..."
-        gcloud compute backend-services get-health "$${BACKEND}" --global --format="json"
-
-        HEALTHY=$(gcloud compute backend-services get-health "$${BACKEND}" --global \
-          --format="value(healthStatus[].healthState)" | grep -c "^HEALTHY$" || true)
-
-        if [ "${HEALTHY:-0}" -ge 1 ]; then
-          echo "Backend $${BACKEND} is healthy ✅"
-          break
-        fi
-
-        echo "Backend not healthy yet (found $${HEALTHY}), waiting 5s..."
-        sleep 5
-      done
-
+      MIG_NAME="web-${_ENV}-mig"
+      echo "Waiting for MIG $${MIG_NAME} to finish rollout..."
+      gcloud compute instance-groups managed wait-until-stable "$${MIG_NAME}" \
+        --zone=us-central1-a \
+        --timeout=15m
+      echo "MIG rollout complete ✅"
 
 # Step 6: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -91,3 +79,4 @@ steps:
       else
         ./switch-to-blue.sh
       fi
+
