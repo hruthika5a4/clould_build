@@ -15,11 +15,12 @@ steps:
   ]
 
 # Step 3: Create new instance template with container
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+- name: 'gcr.io/cloud-builders/gcloud:beta'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      echo "Creating instance template web-template-$BUILD_ID"
       gcloud beta compute instance-templates create web-template-$BUILD_ID \
         --machine-type=e2-small \
         --image-family=cos-stable \
@@ -29,11 +30,12 @@ steps:
         --quiet
 
 # Step 4: Roll update the managed instance group
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+- name: 'gcr.io/cloud-builders/gcloud:beta'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      echo "Updating MIG web-1-mig with new template"
       gcloud compute instance-groups managed rolling-action start-update web-1-mig \
         --version template=web-template-$BUILD_ID \
         --zone=us-central1-a \
