@@ -28,8 +28,6 @@ steps:
       echo "DEPLOY_ENV=$$DEPLOY_ENV" > /workspace/deploy_env.txt
       echo "MIG_NAME=$$MIG_NAME" >> /workspace/deploy_env.txt
 
-
-
 # Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   id: Build-image
@@ -38,9 +36,9 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Building Docker image: $IMAGE"
-      docker build -t $IMAGE .
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Building Docker image: $$IMAGE"
+      docker build -t $$IMAGE .
 
 # Step 3: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
@@ -50,9 +48,9 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Pushing Docker image: $IMAGE"
-      docker push $IMAGE
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Pushing Docker image: $$IMAGE"
+      docker push $$IMAGE
 
 # Step 4: Create instance template
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -62,12 +60,12 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Creating instance template: $TEMPLATE_NAME with image $IMAGE"
-      gcloud beta compute instance-templates create-with-container "$TEMPLATE_NAME" \
+      TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Creating instance template: $$TEMPLATE_NAME with image $$IMAGE"
+      gcloud beta compute instance-templates create-with-container "$$TEMPLATE_NAME" \
         --machine-type=e2-small \
-        --container-image="$IMAGE" \
+        --container-image="$$IMAGE" \
         --tags=http-server \
         --quiet
 
@@ -80,10 +78,10 @@ steps:
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Starting rolling update on MIG: $MIG_NAME"
-      gcloud compute instance-groups managed rolling-action start-update "$MIG_NAME" \
-        --version template="$TEMPLATE_NAME" \
+      TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Starting rolling update on MIG: $$MIG_NAME with template $$TEMPLATE_NAME"
+      gcloud compute instance-groups managed rolling-action start-update "$$MIG_NAME" \
+        --version template="$$TEMPLATE_NAME" \
         --zone=us-central1-a \
         --max-surge=1 \
         --max-unavailable=0 \
@@ -98,8 +96,8 @@ steps:
     - '-c'
     - |
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Waiting for MIG $MIG_NAME to finish rollout..."
-      gcloud compute instance-groups managed wait-until-stable "$MIG_NAME" \
+      echo "Waiting for MIG $$MIG_NAME to finish rollout..."
+      gcloud compute instance-groups managed wait-until-stable "$$MIG_NAME" \
         --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
@@ -111,13 +109,13 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      BACKEND="${DEPLOY_ENV}-backend"
-      echo "Waiting for backend $BACKEND to become healthy..."
-      until gcloud compute backend-services get-health "$BACKEND" --global | grep -q "HEALTHY"; do
+      BACKEND="$${DEPLOY_ENV}-backend"
+      echo "Waiting for backend $$BACKEND to become healthy..."
+      until gcloud compute backend-services get-health "$$BACKEND" --global | grep -q "HEALTHY"; do
         echo "Backend not healthy yet, waiting 10s..."
         sleep 10
       done
-      echo "Backend $BACKEND healthy ✅"
+      echo "Backend $$BACKEND healthy ✅"
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -127,8 +125,8 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Switching traffic to $DEPLOY_ENV environment..."
-      if [ "$DEPLOY_ENV" == "green" ]; then
+      echo "Switching traffic to $$DEPLOY_ENV environment..."
+      if [ "$$DEPLOY_ENV" == "green" ]; then
         bash ./switch-to-green.sh
       else
         bash ./switch-to-blue.sh
