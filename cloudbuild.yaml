@@ -15,7 +15,7 @@ steps:
   ]
 
 # Step 3: Create new instance template with container
-- name: 'gcr.io/cloud-builders/gcloud:beta'
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
@@ -30,7 +30,7 @@ steps:
         --quiet
 
 # Step 4: Roll update the managed instance group
-- name: 'gcr.io/cloud-builders/gcloud:beta'
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
@@ -40,6 +40,7 @@ steps:
         --version template=web-template-$BUILD_ID \
         --zone=us-central1-a \
         --quiet
+
 
 images:
 - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
