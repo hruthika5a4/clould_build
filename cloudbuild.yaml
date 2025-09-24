@@ -31,7 +31,7 @@ steps:
     - |
       TEMPLATE_NAME="web-template-${_ENV}-${_VERSION}-$BUILD_ID"
       echo "Creating instance template: $TEMPLATE_NAME"
-      gcloud beta compute instance-templates create-with-container $TEMPLATE_NAME \
+      gcloud beta compute instance-templates create-with-container "$TEMPLATE_NAME" \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID \
         --tags=http-server \
@@ -44,9 +44,10 @@ steps:
     - '-c'
     - |
       MIG_NAME="web-${_ENV}-mig"
+      TEMPLATE_NAME="web-template-${_ENV}-${_VERSION}-$BUILD_ID"
       echo "Starting rolling update on MIG: $MIG_NAME"
-      gcloud compute instance-groups managed rolling-action start-update $MIG_NAME \
-        --version template=$TEMPLATE_NAME \
+      gcloud compute instance-groups managed rolling-action start-update "$MIG_NAME" \
+        --version template="$TEMPLATE_NAME" \
         --zone=us-central1-a \
         --max-surge=1 \
         --max-unavailable=1 \
@@ -62,7 +63,7 @@ steps:
       BACKEND="${_ENV}-backend"
       echo "Waiting for backend $BACKEND to become healthy..."
       while true; do
-        HEALTHY=$(gcloud compute backend-services get-health $BACKEND --global \
+        HEALTHY=$(gcloud compute backend-services get-health "$BACKEND" --global \
           --format="value(healthStatus[].healthState)" | grep -c HEALTHY)
         if [ "$HEALTHY" -ge 1 ]; then
           echo "Backend $BACKEND is healthy ✅"
@@ -72,7 +73,7 @@ steps:
         sleep 5
       done
 
-# Step 6: Switch traffic safely
+# Step 6: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
