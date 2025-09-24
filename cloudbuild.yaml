@@ -10,3 +10,6 @@ steps:
     ['compute', 'instance-groups', 'managed', 'rolling-action', 'start-update',
      'web-1-mig', '--version', 'template=web-template-$BUILD_ID',
      '--zone=us-central1-a']
+
+# Required if using build.service_account
+logging: CLOUD_LOGGING_ONLY
