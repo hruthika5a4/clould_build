@@ -25,34 +25,32 @@ steps:
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green deployment with full health-check gating
+# Step 4: Blue-Green deployment entirely inside Bash
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      # All variables inside the bash script, not top-level YAML
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
       LB_BACKEND="web-lb-backend"
 
-      # Create Green MIG
       echo "Creating Green MIG $GREEN_MIG..."
       gcloud compute instance-groups managed create "$GREEN_MIG" \
           --base-instance-name web \
           --size 2 \
-          --template "web-template-$BUILD_ID" \
+          --template web-template-$BUILD_ID \
           --zone us-central1-a \
           --health-check web-mig-hc \
           --initial-delay 30 \
           --quiet
 
-      # Wait for all instances in Green MIG to be RUNNING and HEALTHY
-      echo "Waiting for Green MIG instances to become healthy..."
+      echo "Waiting for Green MIG instances to be healthy..."
       gcloud compute instance-groups managed wait-until-stable "$GREEN_MIG" \
           --zone us-central1-a
 
-      # Add Green MIG to backend and remove Old MIG after healthy
-      echo "Updating LB backend to point to Green MIG only..."
+      echo "Switching LB backend to Green MIG only..."
       gcloud compute backend-services update "$LB_BACKEND" \
           --global \
           --instance-group "$GREEN_MIG" \
@@ -66,7 +64,6 @@ steps:
           --instance-group-zone us-central1-a \
           --quiet
 
-      # Delete old MIG safely
       echo "Deleting old MIG $OLD_MIG..."
       gcloud compute instance-groups managed delete "$OLD_MIG" \
           --zone us-central1-a \
