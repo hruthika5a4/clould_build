@@ -7,7 +7,7 @@ steps:
   args:
     ['build', '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID', '.']
 
-# Step 2: Push Docker image
+# Step 2: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
   args:
     ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
@@ -18,23 +18,25 @@ steps:
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID"
+      echo "Creating instance template web-template-$BUILD_ID..."
       gcloud beta compute instance-templates create-with-container web-template-$BUILD_ID \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green MIG deployment
+# Step 4: Blue-Green deployment with LB switch
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      # Define MIG names and LB backend
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
       LB_BACKEND="web-lb-backend"
 
+      # Create Green MIG
       echo "Creating Green MIG $GREEN_MIG..."
       gcloud compute instance-groups managed create $GREEN_MIG \
           --base-instance-name web \
@@ -45,17 +47,28 @@ steps:
           --initial-delay 30 \
           --quiet
 
+      # Wait for all instances to become healthy
       echo "Waiting for Green MIG instances to be healthy..."
       gcloud compute instance-groups managed wait-until-stable $GREEN_MIG \
           --zone us-central1-a
 
-      echo "Switching LB backend to Green MIG..."
+      # Add Green MIG to LB backend
+      echo "Updating LB backend to point to Green MIG..."
       gcloud compute backend-services update $LB_BACKEND \
           --global \
           --instance-group $GREEN_MIG \
           --instance-group-zone us-central1-a \
           --quiet
 
+      # Remove old MIG from LB
+      echo "Removing old MIG $OLD_MIG from LB..."
+      gcloud compute backend-services update $LB_BACKEND \
+          --global \
+          --remove-instance-groups $OLD_MIG \
+          --instance-group-zone us-central1-a \
+          --quiet
+
+      # Delete old MIG
       echo "Deleting old MIG $OLD_MIG..."
       gcloud compute instance-groups managed delete $OLD_MIG \
           --zone us-central1-a \
