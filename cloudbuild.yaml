@@ -1,9 +1,36 @@
 steps:
+# Step 1: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID', '.']
+  args: [
+    'build',
+    '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+    '.'
+  ]
 
+# Step 2: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
+  args: [
+    'push',
+    'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+  ]
+
+# Step 3: Create new instance template with Docker container
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: [
+    'compute', 'instance-templates', 'create', 'web-template-$BUILD_ID',
+    '--machine-type=e2-small',
+    '--container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+    '--tags=http-server'
+  ]
+
+# Step 4: Roll update the managed instance group
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: [
+    'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update',
+    'web-1-mig',
+    '--version', 'template=web-template-$BUILD_ID',
+    '--zone', 'us-central1-a'
+  ]
 
 images:
 - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
