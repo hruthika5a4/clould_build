@@ -28,6 +28,7 @@ steps:
         --tags=http-server
 
 
+
 # Step 4: Roll update the managed instance group
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
   entrypoint: 'bash'
