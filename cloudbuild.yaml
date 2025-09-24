@@ -19,33 +19,69 @@ steps:
       'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
     ]
 
-# Step 3: Create new instance template with container
+# Step 3: Create a new instance template with container (Green)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID"
-      gcloud beta compute instance-templates create-with-container web-template-$BUILD_ID \
+      echo "Creating instance template web-template-green-$BUILD_ID"
+      gcloud beta compute instance-templates create-with-container web-template-green-$BUILD_ID \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Roll update the managed instance group (all-or-nothing)
+# Step 4: Create a new MIG for the Green deployment
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Updating MIG web-1-mig with new template (all-or-nothing)"
-      gcloud compute instance-groups managed rolling-action start-update web-1-mig \
-        --version template=web-template-$BUILD_ID \
-        --zone=us-central1-a \
-        --max-surge=0 \
-        --max-unavailable=100% \
-        --type=proactive \
+      echo "Creating Green MIG web-green-$BUILD_ID"
+      gcloud compute instance-groups managed create web-green-$BUILD_ID \
+        --base-instance-name web-green \
+        --size 1 \
+        --template web-template-green-$BUILD_ID \
+        --zone us-central1-a \
+        --health-check web-health-check \
+        --initial-delay 60 \
         --quiet
+
+# Step 5: Wait until Green MIG is healthy
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Waiting for all instances in Green MIG to be healthy..."
+      until [ $(gcloud compute instance-groups managed list-instances web-green-$BUILD_ID --zone=us-central1-a --format="value(instance.status)" | grep -c RUNNING) -eq 1 ]; do
+        echo "Waiting for instance to be RUNNING..."
+        sleep 5
+      done
+      echo "Green MIG is healthy!"
+
+# Step 6: Switch traffic to Green MIG (update backend service)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Switching traffic to Green MIG"
+      gcloud compute backend-services update web-backend \
+        --global \
+        --instance-group web-green-$BUILD_ID \
+        --instance-group-zone us-central1-a \
+        --quiet
+
+# Optional Step 7: Delete old Blue MIG
+# - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+#   entrypoint: 'bash'
+#   args:
+#     - '-c'
+#     - |
+#       echo "Deleting old Blue MIG"
+#       gcloud compute instance-groups managed delete web-1-mig --zone=us-central1-a --quiet
 
 images:
   - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
