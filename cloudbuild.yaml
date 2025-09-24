@@ -16,7 +16,7 @@ steps:
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID"
+      echo "Creating instance template web-template-$BUILD_ID..."
       gcloud compute instance-templates create web-template-$BUILD_ID \
         --machine-type=e2-medium \
         --image-family=debian-11 \
@@ -34,51 +34,69 @@ steps:
   args:
     - '-c'
     - |
-      if ! gcloud compute instance-groups managed describe web-green-mig --zone=us-central1-a >/dev/null 2>&1; then
-        echo "Creating Green MIG web-green-mig"
-        gcloud compute instance-groups managed create web-green-mig \
+      GREEN_MIG="web-green-mig"
+      TEMPLATE="web-template-$BUILD_ID"
+      ZONE="us-central1-a"
+      HEALTH_CHECK="web-health-check"
+
+      if ! gcloud compute instance-groups managed describe $GREEN_MIG --zone=$ZONE >/dev/null 2>&1; then
+        echo "Creating Green MIG $GREEN_MIG..."
+        gcloud compute instance-groups managed create $GREEN_MIG \
           --base-instance-name web-green \
           --size 2 \
-          --template web-template-$BUILD_ID \
-          --zone us-central1-a \
-          --health-check web-health-check \
+          --template $TEMPLATE \
+          --zone $ZONE \
+          --health-check $HEALTH_CHECK \
           --initial-delay 60 \
           --quiet
       else
-        echo "Updating Green MIG web-green-mig"
-        gcloud compute instance-groups managed set-instance-template web-green-mig \
-          --template web-template-$BUILD_ID \
-          --zone=us-central1-a
-        gcloud compute instance-groups managed rolling-action start-update web-green-mig \
-          --version template=web-template-$BUILD_ID \
-          --zone=us-central1-a
+        echo "Updating Green MIG $GREEN_MIG..."
+        gcloud compute instance-groups managed set-instance-template $GREEN_MIG \
+          --template $TEMPLATE \
+          --zone $ZONE
+        gcloud compute instance-groups managed rolling-action start-update $GREEN_MIG \
+          --version template=$TEMPLATE \
+          --zone $ZONE
       fi
 
-# Step 5: Wait for GREEN MIG to be healthy
+# Step 5: Wait until Green MIG is stable and healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      gcloud compute instance-groups managed wait-until web-green-mig \
-        --zone=us-central1-a --stable
+      echo "Waiting for Green MIG to become stable..."
+      GREEN_MIG="web-green-mig"
+      ZONE="us-central1-a"
+      gcloud compute instance-groups managed wait-until-stable $GREEN_MIG --zone=$ZONE
 
-# Step 6: Switch Load Balancer to GREEN
+# Step 6: Switch Load Balancer to GREEN MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      gcloud compute backend-services update web-backend \
+      echo "Switching Load Balancer to Green MIG..."
+      LB_BACKEND="web-backend"
+      GREEN_MIG="web-green-mig"
+      ZONE="us-central1-a"
+
+      gcloud compute backend-services update $LB_BACKEND \
         --global \
-        --instance-group web-green-mig \
-        --instance-group-zone us-central1-a
+        --instance-group $GREEN_MIG \
+        --instance-group-zone $ZONE \
+        --quiet
 
-# Step 7: (Optional) Delete old BLUE MIG
+# Step 7: Delete old BLUE MIG (optional)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      gcloud compute instance-groups managed delete web-blue-mig \
-        --zone=us-central1-a --quiet || true
+      BLUE_MIG="web-blue-mig"
+      ZONE="us-central1-a"
+      echo "Deleting old Blue MIG if exists..."
+      gcloud compute instance-groups managed delete $BLUE_MIG --zone=$ZONE --quiet || true
+
+images:
+  - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$
