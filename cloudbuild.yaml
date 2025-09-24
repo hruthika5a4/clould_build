@@ -32,14 +32,15 @@ steps:
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green deployment (create new MIG, wait healthy, switch LB, delete old MIG)
+# Step 4: Blue-Green deployment (all variables inside script)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
       GREEN_MIG="web-green-$BUILD_ID"
-      LB_BACKEND="web-lb-backend"  # replace with your backend service name
+      LB_BACKEND="web-lb-backend"  # <-- replace with your backend service name
+      OLD_MIG="web-1-mig"
 
       echo "Creating Green MIG with new template..."
       gcloud compute instance-groups managed create $GREEN_MIG \
@@ -63,7 +64,7 @@ steps:
           --quiet
 
       echo "Deleting old MIG..."
-      gcloud compute instance-groups managed delete web-1-mig \
+      gcloud compute instance-groups managed delete $OLD_MIG \
           --zone us-central1-a \
           --quiet
 
