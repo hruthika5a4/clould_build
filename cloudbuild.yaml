@@ -4,7 +4,7 @@ steps:
   args: [
     'build',
     '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
-    '.'
+    '.' 
   ]
 
 # Step 2: Push Docker image to Artifact Registry
@@ -27,8 +27,7 @@ steps:
         --tags=http-server \
         --quiet
 
-
-# Step 4: Roll update the managed instance group
+# Step 4: Roll update the managed instance group safely
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
@@ -38,8 +37,10 @@ steps:
       gcloud compute instance-groups managed rolling-action start-update web-1-mig \
         --version template=web-template-$BUILD_ID \
         --zone=us-central1-a \
+        --max-unavailable=0 \
+        --max-surge=1 \
+        --type=proactive \
         --quiet
-
 
 images:
 - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
