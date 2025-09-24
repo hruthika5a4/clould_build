@@ -75,8 +75,9 @@ steps:
     - |
       echo "Switching traffic to ${_ENV} environment..."
       if [ "${_ENV}" == "green" ]; then
-        ./switch-to-green.sh
+        bash ./switch-to-green.sh
       else
-        ./switch-to-blue.sh
+        bash ./switch-to-blue.sh
       fi
+
 
