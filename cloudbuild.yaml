@@ -1,3 +1,4 @@
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
@@ -5,90 +6,47 @@ steps:
 # Step 1: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
-    ['build', '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID', '.']
+    [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+      '.'
+    ]
 
 # Step 2: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
   args:
-    ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
+    [
+      'push',
+      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+    ]
 
-# Step 3: Create new instance template
+# Step 3: Create new instance template with container
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID..."
-      gcloud compute instance-templates create-with-container web-template-$BUILD_ID \
+      echo "Creating instance template web-template-$BUILD_ID"
+      gcloud beta compute instance-templates create-with-container web-template-$BUILD_ID \
         --machine-type=e2-small \
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green deployment entirely inside Bash
+# Step 4: Roll update the managed instance group (all-or-nothing)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      # Variables defined inside Bash
-      GREEN_MIG="web-green-$BUILD_ID"
-      OLD_MIG="web-blue-mig"
-      LB_BACKEND="web-backend"
-
-      # Check if Green MIG exists
-      if ! gcloud compute instance-groups managed describe $GREEN_MIG --zone=us-central1-a >/dev/null 2>&1; then
-        echo "Creating Green MIG $GREEN_MIG..."
-        gcloud compute instance-groups managed create $GREEN_MIG \
-          --base-instance-name web-green \
-          --size 2 \
-          --template web-template-$BUILD_ID \
-          --zone us-central1-a \
-          --health-check web-mig-hc \
-          --initial-delay 30 \
-          --quiet
-      else
-        echo "Updating Green MIG $GREEN_MIG..."
-        gcloud compute instance-groups managed set-instance-template $GREEN_MIG \
-          --template web-template-$BUILD_ID \
-          --zone=us-central1-a
-        gcloud compute instance-groups managed rolling-action start-update $GREEN_MIG \
-          --version template=web-template-$BUILD_ID \
-          --zone=us-central1-a
-      fi
-
-# Step 5: Wait for Green MIG to be healthy
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      echo "Waiting for Green MIG instances to be healthy..."
-      gcloud compute instance-groups managed wait-until-stable $GREEN_MIG --zone=us-central1-a
-
-# Step 6: Switch Load Balancer to Green MIG
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      echo "Switching LB backend to Green MIG..."
-      gcloud compute backend-services update $LB_BACKEND \
-        --global \
-        --instance-group $GREEN_MIG \
-        --instance-group-zone us-central1-a \
-        --quiet
-
-# Step 7: Delete old Blue MIG
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      echo "Deleting old Blue MIG $OLD_MIG..."
-      gcloud compute instance-groups managed delete $OLD_MIG \
+      echo "Updating MIG web-1-mig with new template (all-or-nothing)"
+      gcloud compute instance-groups managed rolling-action start-update web-1-mig \
+        --version template=web-template-$BUILD_ID \
         --zone=us-central1-a \
-        --quiet || true
+        --max-surge=0 \
+        --max-unavailable=100% \
+        --type=proactive \
+        --quiet
 
 images:
   - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
