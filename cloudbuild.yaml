@@ -2,11 +2,11 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _ENV: "green"        # default, will be auto-detected
+  _ENV: "green"        # default, ignored for dynamic blue-green
   _VERSION: "v1"       # version tag
 
 steps:
-# Step 1: Detect current active environment and choose deployment env
+# Step 1: Detect current active environment and choose deploy target
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Detect-active-env
   entrypoint: 'bash'
@@ -29,21 +29,26 @@ steps:
 # Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   id: Build-image
+  entrypoint: 'bash'
   args:
-    [
-      'build',
-      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID',
-      '.'
-    ]
+    - '-c'
+    - |
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Building Docker image: $IMAGE"
+      docker build -t $IMAGE .
 
-# Step 3: Push Docker image to Artifact Registry
+# Step 3: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
   id: Push-image
+  entrypoint: 'bash'
   args:
-    [
-      'push',
-      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID'
-    ]
+    - '-c'
+    - |
+      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Pushing Docker image: $IMAGE"
+      docker push $IMAGE
 
 # Step 4: Create instance template
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -54,10 +59,11 @@ steps:
     - |
       DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
       TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Creating instance template: $TEMPLATE_NAME"
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Creating instance template: $TEMPLATE_NAME with image $IMAGE"
       gcloud beta compute instance-templates create-with-container "$TEMPLATE_NAME" \
         --machine-type=e2-small \
-        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID \
+        --container-image="$IMAGE" \
         --tags=http-server \
         --quiet
 
@@ -94,7 +100,7 @@ steps:
         --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
-# Step 7: Wait for backend health
+# Step 7: Wait until backend is healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-backend
   entrypoint: 'bash'
