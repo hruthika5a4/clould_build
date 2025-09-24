@@ -18,10 +18,10 @@ steps:
 
       if [[ "$$CURRENT_TARGET" == *"blue"* ]]; then
         DEPLOY_ENV="green"
-        MIG_NAME="web-1-mig-green"
+        MIG_NAME="web-green-mig"
       else
         DEPLOY_ENV="blue"
-        MIG_NAME="web-1-mig-blue"
+        MIG_NAME="web-1-mig"
       fi
 
       echo "Deploying to environment: $$DEPLOY_ENV"
