@@ -5,12 +5,19 @@ steps:
 # Step 1: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
-    ['build', '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID', '.']
+    [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+      '.'
+    ]
 
 # Step 2: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
-    ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
+    [
+      'push',
+      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+    ]
 
 # Step 3: Create instance template
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -31,7 +38,7 @@ steps:
   args:
     - '-c'
     - |
-      # Variables inside the Bash script
+      # All variables are defined inside the Bash script
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
       LB_BACKEND="web-lb-backend"
