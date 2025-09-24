@@ -2,7 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _VERSION: "v1"       # version tag (no _ENV, fully dynamic blue-green)
+  _VERSION: "v1"       # version tag
 
 steps:
 # Step 1: Detect current active environment and choose deploy target
@@ -30,7 +30,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       echo "Building Docker image: $IMAGE"
       docker build -t $IMAGE .
@@ -42,7 +42,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       echo "Pushing Docker image: $IMAGE"
       docker push $IMAGE
@@ -54,7 +54,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       echo "Creating instance template: $TEMPLATE_NAME with image $IMAGE"
@@ -71,7 +71,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       MIG_NAME="web-${DEPLOY_ENV}-mig"
       TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       echo "Starting rolling update on MIG: $MIG_NAME"
@@ -90,7 +90,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       MIG_NAME="web-${DEPLOY_ENV}-mig"
       echo "Waiting for MIG $MIG_NAME to finish rollout..."
       gcloud compute instance-groups managed wait-until-stable "$MIG_NAME" \
@@ -104,7 +104,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       BACKEND="${DEPLOY_ENV}-backend"
       echo "Waiting for backend $BACKEND to become healthy..."
       until gcloud compute backend-services get-health "$BACKEND" --global | grep -q "HEALTHY"; do
@@ -120,7 +120,7 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt)
       echo "Switching traffic to $DEPLOY_ENV environment..."
       if [ "$DEPLOY_ENV" == "green" ]; then
         bash ./switch-to-green.sh
