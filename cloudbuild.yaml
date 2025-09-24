@@ -27,6 +27,7 @@ steps:
         --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
         --tags=http-server
 
+
 # Step 4: Roll update the managed instance group
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
   entrypoint: 'bash'
