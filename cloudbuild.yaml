@@ -2,16 +2,33 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-# Step 1: Build image
+# Step 1: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID', '.']
 
-# Step 2: Push image
+# Step 2: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
 
 # Step 3: Create instance template
-# Step 3: Ensure Green MIG exists (create if not exists)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Creating instance template web-template-$BUILD_ID"
+      gcloud compute instance-templates create web-template-$BUILD_ID \
+        --machine-type=e2-medium \
+        --image-family=debian-11 \
+        --image-project=debian-cloud \
+        --metadata=startup-script='#!/bin/bash
+          apt-get update
+          apt-get install -y docker.io
+          docker pull us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID
+          docker run -d -p 80:80 us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID' \
+        --quiet
+
+# Step 4: Create or Update GREEN MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
@@ -30,41 +47,27 @@ steps:
       else
         echo "Updating Green MIG web-green-mig"
         gcloud compute instance-groups managed set-instance-template web-green-mig \
-          --template=web-template-$BUILD_ID \
+          --template web-template-$BUILD_ID \
           --zone=us-central1-a
         gcloud compute instance-groups managed rolling-action start-update web-green-mig \
           --version template=web-template-$BUILD_ID \
           --zone=us-central1-a
       fi
 
-# Step 4: Create/Update GREEN MIG
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: bash
-  args:
-    - -c
-    - |
-      gcloud compute instance-groups managed create web-green-mig \
-        --template=web-template-$BUILD_ID \
-        --size=2 \
-        --zone=us-central1-a || \
-      gcloud compute instance-groups managed set-instance-template web-green-mig \
-        --template=web-template-$BUILD_ID \
-        --zone=us-central1-a
-
 # Step 5: Wait for GREEN MIG to be healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: bash
+  entrypoint: 'bash'
   args:
-    - -c
+    - '-c'
     - |
       gcloud compute instance-groups managed wait-until web-green-mig \
         --zone=us-central1-a --stable
 
 # Step 6: Switch Load Balancer to GREEN
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: bash
+  entrypoint: 'bash'
   args:
-    - -c
+    - '-c'
     - |
       gcloud compute backend-services update web-backend \
         --global \
@@ -73,9 +76,9 @@ steps:
 
 # Step 7: (Optional) Delete old BLUE MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: bash
+  entrypoint: 'bash'
   args:
-    - -c
+    - '-c'
     - |
       gcloud compute instance-groups managed delete web-blue-mig \
         --zone=us-central1-a --quiet || true
