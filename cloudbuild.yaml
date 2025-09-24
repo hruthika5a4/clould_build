@@ -8,12 +8,15 @@ steps:
   ]
 
 # Step 2: Push Docker image to Artifact Registry
-- name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'push',
-    'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
-  ]
-
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      gcloud beta compute instance-templates create web-template-$BUILD_ID \
+        --machine-type=e2-small \
+        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
+        --tags=http-server
 # Step 3: Create new instance template with Docker container
 - name: 'gcr.io/cloud-builders/gcloud'
   args: [
