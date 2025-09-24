@@ -1,18 +1,23 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
 # Step 1: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'build',
-    '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
-    '.' 
-  ]
+  args:
+    [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+      '.'
+    ]
 
 # Step 2: Push Docker image to Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'push',
-    'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
-  ]
+  args:
+    [
+      'push',
+      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+    ]
 
 # Step 3: Create new instance template with container
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -27,23 +32,20 @@ steps:
         --tags=http-server \
         --quiet
 
-# Step 4: Roll update the managed instance group safely
+# Step 4: Roll update the managed instance group (all-or-nothing)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Updating MIG web-1-mig with new template"
+      echo "Updating MIG web-1-mig with new template (all-or-nothing)"
       gcloud compute instance-groups managed rolling-action start-update web-1-mig \
         --version template=web-template-$BUILD_ID \
         --zone=us-central1-a \
-        --max-unavailable=0 \
-        --max-surge=1 \
+        --max-surge=0 \
+        --max-unavailable=100% \
         --type=proactive \
         --quiet
 
 images:
-- 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
-
-options:
-  logging: CLOUD_LOGGING_ONLY
+  - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
