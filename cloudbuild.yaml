@@ -51,7 +51,25 @@ steps:
         --type=proactive \
         --quiet
 
-# Step 5: Switch traffic using shell script
+# Step 5: Wait for backend to become healthy
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Waiting for ${_ENV} backend to become healthy..."
+      BACKEND="${_ENV}-backend"
+      while true; do
+        HEALTHY=$(gcloud compute backend-services get-health $BACKEND --global --format="value(healthStatus[].healthState)" | grep -c HEALTHY)
+        if [ "$HEALTHY" -ge 1 ]; then
+          echo "${_ENV} backend is healthy ✅"
+          break
+        fi
+        echo "Not healthy yet, waiting 5s..."
+        sleep 5
+      done
+
+# Step 6: Switch traffic using shell script
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
