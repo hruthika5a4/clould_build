@@ -99,4 +99,4 @@ steps:
       gcloud compute instance-groups managed delete $BLUE_MIG --zone=$ZONE --quiet || true
 
 images:
-  - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$
+- 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
