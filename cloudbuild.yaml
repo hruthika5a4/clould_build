@@ -25,15 +25,16 @@ steps:
         --tags=http-server \
         --quiet
 
-# Step 4: Blue-Green deployment inside Bash
+# Step 4: Blue-Green deployment entirely inside Bash
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
+      # Variables inside the Bash script
       GREEN_MIG="web-green-$BUILD_ID"
       OLD_MIG="web-1-mig"
-      LB_BACKEND="web-map"
+      LB_BACKEND="web-lb-backend"
 
       echo "Creating Green MIG $GREEN_MIG..."
       gcloud compute instance-groups managed create "$GREEN_MIG" \
