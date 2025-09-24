@@ -11,7 +11,7 @@ steps:
   args:
     [
       'build',
-      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}',
+      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID',
       '.'
     ]
 
@@ -20,23 +20,23 @@ steps:
   args:
     [
       'push',
-      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}'
+      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID'
     ]
 
-# Step 3: Create instance template for the environment
+# Step 3: Create instance template for the environment (unique)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
       echo "Creating instance template for ${_ENV}"
-      gcloud beta compute instance-templates create-with-container web-template-${_ENV}-${_VERSION} \
+      gcloud beta compute instance-templates create-with-container web-template-${_ENV}-${_VERSION}-$BUILD_ID \
         --machine-type=e2-small \
-        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION} \
+        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}-$BUILD_ID \
         --tags=http-server \
         --quiet
 
-# Step 4: Create or update the MIG for the environment
+# Step 4: Update the MIG for the environment (rolling update)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
@@ -44,7 +44,7 @@ steps:
     - |
       echo "Updating MIG for ${_ENV}"
       gcloud compute instance-groups managed rolling-action start-update web-${_ENV}-mig \
-        --version template=web-template-${_ENV}-${_VERSION} \
+        --version template=web-template-${_ENV}-${_VERSION}-$BUILD_ID \
         --zone=us-central1-a \
         --max-surge=1 \
         --max-unavailable=1 \
