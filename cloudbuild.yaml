@@ -2,8 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _ENV: "green"        # default, ignored for dynamic blue-green
-  _VERSION: "v1"       # version tag
+  _VERSION: "v1"       # version tag (no _ENV, fully dynamic blue-green)
 
 steps:
 # Step 1: Detect current active environment and choose deploy target
@@ -14,16 +13,14 @@ steps:
     - '-c'
     - |
       set -e
-      CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global \
-        --format='value(target)')
+      CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global --format='value(target)')
       echo "Current forwarding target: $CURRENT_TARGET"
       if [[ "$CURRENT_TARGET" == *"blue"* ]]; then
-        echo "Blue is live → deploying to GREEN"
         DEPLOY_ENV="green"
       else
-        echo "Green is live → deploying to BLUE"
         DEPLOY_ENV="blue"
       fi
+      echo "Deploying to environment: $DEPLOY_ENV"
       echo "DEPLOY_ENV=$DEPLOY_ENV" > /workspace/deploy_env.txt
 
 # Step 2: Build Docker image
@@ -110,8 +107,7 @@ steps:
       DEPLOY_ENV=$(cat /workspace/deploy_env.txt | cut -d= -f2)
       BACKEND="${DEPLOY_ENV}-backend"
       echo "Waiting for backend $BACKEND to become healthy..."
-      until gcloud compute backend-services get-health "$BACKEND" --global \
-        | grep -q "HEALTHY"; do
+      until gcloud compute backend-services get-health "$BACKEND" --global | grep -q "HEALTHY"; do
         echo "Backend not healthy yet, waiting 10s..."
         sleep 10
       done
