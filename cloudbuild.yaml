@@ -51,13 +51,16 @@ steps:
         --type=proactive \
         --quiet
 
-# Step 5: Switch traffic to the new environment (manual or automated)
+# Step 5: Switch traffic using shell script
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Switching LB traffic to ${_ENV}-backend"
-      gcloud compute backend-services update web-lb-backend \
-        --global \
-        --set-backends=group=web-${_ENV}-mig,group-zone=us-central1-a
+      if [ "${_ENV}" == "green" ]; then
+        echo "Switching LB traffic to GREEN environment"
+        bash switch-to-green.sh
+      else
+        echo "Switching LB traffic to BLUE environment"
+        bash switch-to-blue.sh
+      fi
