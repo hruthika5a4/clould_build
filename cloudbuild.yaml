@@ -1,6 +1,9 @@
-
 options:
   logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _ENV: "green"        # blue or green
+  _VERSION: "v1"       # version tag
 
 steps:
 # Step 1: Build Docker image
@@ -8,7 +11,7 @@ steps:
   args:
     [
       'build',
-      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID',
+      '-t', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}',
       '.'
     ]
 
@@ -17,36 +20,44 @@ steps:
   args:
     [
       'push',
-      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+      'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION}'
     ]
 
-# Step 3: Create new instance template with container
+# Step 3: Create instance template for the environment
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Creating instance template web-template-$BUILD_ID"
-      gcloud beta compute instance-templates create-with-container web-template-$BUILD_ID \
+      echo "Creating instance template for ${_ENV}"
+      gcloud beta compute instance-templates create-with-container web-template-${_ENV}-${_VERSION} \
         --machine-type=e2-small \
-        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
+        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_ENV}-${_VERSION} \
         --tags=http-server \
         --quiet
 
-# Step 4: Roll update the managed instance group (all-or-nothing)
+# Step 4: Create or update the MIG for the environment
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Updating MIG web-1-mig with new template (all-or-nothing)"
-      gcloud compute instance-groups managed rolling-action start-update web-1-mig \
-        --version template=web-template-$BUILD_ID \
+      echo "Updating MIG for ${_ENV}"
+      gcloud compute instance-groups managed rolling-action start-update web-${_ENV}-mig \
+        --version template=web-template-${_ENV}-${_VERSION} \
         --zone=us-central1-a \
-        --max-surge=0 \
-        --max-unavailable=100% \
+        --max-surge=1 \
+        --max-unavailable=1 \
         --type=proactive \
         --quiet
 
-images:
-  - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
+# Step 5: Switch traffic to the new environment (manual or automated)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Switching LB traffic to ${_ENV}-backend"
+      gcloud compute backend-services update web-lb-backend \
+        --global \
+        --set-backends=group=web-${_ENV}-mig,group-zone=us-central1-a
