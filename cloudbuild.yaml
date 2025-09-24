@@ -32,20 +32,40 @@ steps:
         --tags=http-server \
         --quiet
 
-# Step 4: Roll update the managed instance group (all-or-nothing)
+# Step 4: Blue-Green deployment (create new MIG, wait healthy, switch LB, delete old MIG)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      echo "Updating MIG web-1-mig with new template (all-or-nothing)"
-      gcloud compute instance-groups managed rolling-action start-update web-1-mig \
-        --version template=web-template-$BUILD_ID \
-        --zone=us-central1-a \
-        --max-surge=0 \
-        --max-unavailable=100% \
-        --type=proactive \
-        --quiet
+      GREEN_MIG="web-green-$BUILD_ID"
+      LB_BACKEND="web-lb-backend"  # replace with your backend service name
+
+      echo "Creating Green MIG with new template..."
+      gcloud compute instance-groups managed create $GREEN_MIG \
+          --base-instance-name web \
+          --size 2 \
+          --template web-template-$BUILD_ID \
+          --zone us-central1-a \
+          --health-check web-mig-hc \
+          --initial-delay 30 \
+          --quiet
+
+      echo "Waiting for all Green MIG instances to be RUNNING and HEALTHY..."
+      gcloud compute instance-groups managed wait-until-stable $GREEN_MIG \
+          --zone us-central1-a
+
+      echo "Switching load balancer backend to Green MIG..."
+      gcloud compute backend-services update $LB_BACKEND \
+          --global \
+          --instance-group $GREEN_MIG \
+          --instance-group-zone us-central1-a \
+          --quiet
+
+      echo "Deleting old MIG..."
+      gcloud compute instance-groups managed delete web-1-mig \
+          --zone us-central1-a \
+          --quiet
 
 images:
   - 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID'
