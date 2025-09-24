@@ -11,16 +11,31 @@ steps:
   args: ['push', 'us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID']
 
 # Step 3: Create instance template
+# Step 3: Ensure Green MIG exists (create if not exists)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  entrypoint: bash
+  entrypoint: 'bash'
   args:
-    - -c
+    - '-c'
     - |
-      gcloud compute instance-templates create-with-container web-template-$BUILD_ID \
-        --machine-type=e2-small \
-        --container-image=us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$BUILD_ID \
-        --tags=http-server \
-        --quiet
+      if ! gcloud compute instance-groups managed describe web-green-mig --zone=us-central1-a >/dev/null 2>&1; then
+        echo "Creating Green MIG web-green-mig"
+        gcloud compute instance-groups managed create web-green-mig \
+          --base-instance-name web-green \
+          --size 2 \
+          --template web-template-$BUILD_ID \
+          --zone us-central1-a \
+          --health-check web-health-check \
+          --initial-delay 60 \
+          --quiet
+      else
+        echo "Updating Green MIG web-green-mig"
+        gcloud compute instance-groups managed set-instance-template web-green-mig \
+          --template=web-template-$BUILD_ID \
+          --zone=us-central1-a
+        gcloud compute instance-groups managed rolling-action start-update web-green-mig \
+          --version template=web-template-$BUILD_ID \
+          --zone=us-central1-a
+      fi
 
 # Step 4: Create/Update GREEN MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
