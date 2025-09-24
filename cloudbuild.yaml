@@ -55,11 +55,12 @@ steps:
     - '-c'
     - |
       echo "Waiting for all instances in Green MIG to be healthy..."
-      until [ $(gcloud compute instance-groups managed list-instances web-green-$BUILD_ID --zone=us-central1-a --format="value(instance.status)" | grep -c RUNNING) -eq 1 ]; do
-        echo "Waiting for instance to be RUNNING..."
+      until [ $(gcloud compute instance-groups managed list-instances web-green-$BUILD_ID --zone=us-central1-a --format="value(instance.status,instance.healthStatus)" | grep -c "RUNNING,HEALTHY") -eq 1 ]; do
+        echo "Waiting for instance to be RUNNING and HEALTHY..."
         sleep 5
       done
       echo "Green MIG is healthy!"
+
 
 # Step 6: Switch traffic to Green MIG (update backend service)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
