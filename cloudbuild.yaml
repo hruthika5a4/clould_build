@@ -69,7 +69,6 @@ steps:
         sleep 5
       done
 
-
 # Step 6: Switch traffic using shell script
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   entrypoint: 'bash'
