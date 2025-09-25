@@ -123,17 +123,35 @@ steps:
 # 🔹 New step goes right here
 # Step 7.5: Readiness buffer
 # Step 7.5: Readiness buffer + warm-up
+# Step 7.5: Application health check
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  id: Warm-up-instances
+  id: App-health-check
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
 
-      echo "Giving instances extra time to warm up..."
-      sleep 120  # initial buffer
+      # Get LB frontend IP
+      LB_IP=$(gcloud compute forwarding-rules describe web-rule \
+                --global --format="value(IPAddress)")
+
+      echo "🔍 Checking application health at http://$LB_IP/health"
+
+      # Retry loop until app responds correctly
+      for i in {1..30}; do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$LB_IP/health || true)
+        if [ "$STATUS" -eq 200 ]; then
+          echo "✅ Application responded with 200 OK"
+          exit 0
+        fi
+        echo "⚠️ Attempt $i: Got status $STATUS, retrying in 5s..."
+        sleep 5
+      done
+
+      echo "❌ Application failed health check after 30 attempts"
+      exit 1
+
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
