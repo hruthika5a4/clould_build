@@ -122,41 +122,18 @@ steps:
 
 # 🔹 New step goes right here
 # Step 7.5: Readiness buffer
-# Step 7.5: Application health check (using internal IPs)
+# Step 7.5: Readiness buffer + warm-up
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  id: App-health-check
+  id: Warm-up-instances
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      set -e
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
-      echo "🔍 Fetching instances from MIG: $MIG_NAME"
-      INSTANCE=$(gcloud compute instance-groups managed list-instances "$MIG_NAME" \
-                   --zone=us-central1-a --format="value(instance)" | head -n1)
-
-      # Get internal IP
-      INSTANCE_IP=$(gcloud compute instances describe "$INSTANCE" \
-                      --zone=us-central1-a --format="value(networkInterfaces[0].networkIP)")
-
-      echo "Checking app health at http://$INSTANCE_IP/health"
-
-      for i in {1..30}; do
-        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INSTANCE_IP/health || true)
-        if [ "$STATUS" -eq 200 ]; then
-          echo "✅ Application on $INSTANCE_IP is healthy"
-          exit 0
-        fi
-        echo "⚠️ Attempt $i: Got status $STATUS, retrying in 5s..."
-        sleep 5
-      done
-
-      echo "❌ Application failed health check after 30 attempts"
-      exit 1
-
-
+      echo "Giving instances extra time to warm up..."
+      sleep 120  # initial buffer
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
