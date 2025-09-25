@@ -60,17 +60,17 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      cat > startup.sh <<EOF
+      cat > startup.sh <<'STARTUP_EOF'
 #!/bin/bash
 set -e
 IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
 
-# Stop previous container if running
-docker ps -q --filter "ancestor=\$IMAGE" | xargs -r docker stop
+# Stop any previous container
+docker ps -q --filter "ancestor=$IMAGE" | xargs -r docker stop
 
-# Run new container
-docker run -d -p 80:80 \$IMAGE
-EOF
+# Run the container
+docker run -d -p 80:80 $IMAGE
+STARTUP_EOF
 
 # Step 5: Create instance template using startup.sh
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
