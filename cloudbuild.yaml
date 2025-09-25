@@ -83,11 +83,12 @@ steps:
       gcloud compute instance-groups managed rolling-action start-update "$$MIG_NAME" \
         --version template="$$TEMPLATE_NAME" \
         --zone=us-central1-a \
-        --minimal-action=REPLACE \
+        --minimal-action=replace \
         --max-surge=1 \
         --max-unavailable=1 \
         --type=proactive \
         --quiet
+
 
 
 # Step 6: Wait for MIG rollout to complete
