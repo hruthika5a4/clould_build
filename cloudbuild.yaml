@@ -126,7 +126,7 @@ steps:
     - '-c'
     - |
       echo "Giving instances extra time to warm up..."
-      sleep 30
+      sleep 60
       echo "Buffer done ✅"
 
 # Step 8: Switch traffic
