@@ -122,8 +122,7 @@ steps:
 
 # 🔹 New step goes right here
 # Step 7.5: Readiness buffer
-# Step 7.5: Readiness buffer + warm-up
-# Step 7.5: Application health check
+# Step 7.5: Application health check (direct to MIG instances)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: App-health-check
   entrypoint: 'bash'
@@ -131,18 +130,21 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
-      # Get LB frontend IP
-      LB_IP=$(gcloud compute forwarding-rules describe web-rule \
-                --global --format="value(IPAddress)")
+      echo "🔍 Fetching instances from MIG: $MIG_NAME"
+      INSTANCE=$(gcloud compute instance-groups managed list-instances "$MIG_NAME" \
+                   --zone=us-central1-a --format="value(instance)" | head -n1)
 
-      echo "🔍 Checking application health at http://$LB_IP/health"
+      INSTANCE_IP=$(gcloud compute instances describe "$INSTANCE" \
+                      --zone=us-central1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
 
-      # Retry loop until app responds correctly
+      echo "Checking app health at http://$INSTANCE_IP/health"
+
       for i in {1..30}; do
-        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$LB_IP/health || true)
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INSTANCE_IP/health || true)
         if [ "$STATUS" -eq 200 ]; then
-          echo "✅ Application responded with 200 OK"
+          echo "✅ Application on $INSTANCE_IP is healthy"
           exit 0
         fi
         echo "⚠️ Attempt $i: Got status $STATUS, retrying in 5s..."
