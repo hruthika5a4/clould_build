@@ -52,27 +52,7 @@ steps:
       echo "Pushing Docker image: $IMAGE"
       docker push $IMAGE
 
-# Step 4: Create startup.sh dynamically
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  id: Create-startup
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      cat > startup.sh <<'STARTUP_EOF'
-#!/bin/bash
-set -e
-IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-
-# Stop any previous container
-docker ps -q --filter "ancestor=$IMAGE" | xargs -r docker stop
-
-# Run the container
-docker run -d -p 80:80 $IMAGE
-STARTUP_EOF
-
-# Step 5: Create instance template using startup.sh
+# Step 4: Create instance template using existing startup.sh
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Create-template
   entrypoint: 'bash'
@@ -88,8 +68,6 @@ STARTUP_EOF
         --metadata-from-file=startup-script=startup.sh \
         --quiet
 
-
-
 # Step 5: Rolling update MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Rolling-update
@@ -99,10 +77,10 @@ STARTUP_EOF
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Starting rolling update on MIG: $$MIG_NAME with template $$TEMPLATE_NAME"
-      gcloud compute instance-groups managed rolling-action start-update "$$MIG_NAME" \
-        --version template="$$TEMPLATE_NAME" \
+      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Starting rolling update on MIG: $MIG_NAME with template $TEMPLATE_NAME"
+      gcloud compute instance-groups managed rolling-action start-update "$MIG_NAME" \
+        --version template="$TEMPLATE_NAME" \
         --zone=us-central1-a \
         --minimal-action=replace \
         --max-surge=1 \
