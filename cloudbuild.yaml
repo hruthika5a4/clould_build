@@ -101,7 +101,7 @@ steps:
         --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
-# Step 7: Wait until backend is healthy
+## Step 7: Wait until backend is healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-backend
   entrypoint: 'bash'
@@ -116,6 +116,18 @@ steps:
         sleep 10
       done
       echo "Backend $$BACKEND healthy ✅"
+
+# 🔹 New step goes right here
+# Step 7.5: Readiness buffer
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  id: Readiness-buffer
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Giving instances extra time to warm up..."
+      sleep 30
+      echo "Buffer done ✅"
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
