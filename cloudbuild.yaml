@@ -5,42 +5,8 @@ substitutions:
   _VERSION: "v1"       # version tag
 
 steps:
-# Step 1: Detect current active environment and choose deploy target
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  id: Detect-active-env
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      set -e
-      CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global --format='value(target)')
-      echo "Current forwarding target: $$CURRENT_TARGET"
-
-      if [[ "$$CURRENT_TARGET" == *"blue"* ]]; then
-        DEPLOY_ENV="green"
-        MIG_NAME="web-green-mig"
-      else
-        DEPLOY_ENV="blue"
-        MIG_NAME="web-1-mig"
-      fi
-
-      echo "Deploying to environment: $$DEPLOY_ENV"
-      echo "DEPLOY_ENV=$$DEPLOY_ENV" > /workspace/deploy_env.txt
-      echo "MIG_NAME=$$MIG_NAME" >> /workspace/deploy_env.txt
-
-# Step 2: Build Docker image
-- name: 'gcr.io/cloud-builders/docker'
-  id: Build-image
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Building Docker image: $$IMAGE"
-      docker build -t $$IMAGE .
-
-# Step 3: Push Docker image
+steps:
+# Step 1: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
   id: Push-image
   entrypoint: 'bash'
@@ -48,9 +14,42 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Pushing Docker image: $$IMAGE"
-      docker push $$IMAGE
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Pushing Docker image: $IMAGE"
+      docker push $IMAGE
+
+# Step 2: Create startup.sh dynamically
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: Create-startup
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
+      cat > startup.sh <<'EOF'
+#!/bin/bash
+set -e
+DEPLOY_ENV='${DEPLOY_ENV}'
+VERSION='${_VERSION}'
+BUILD_ID='${BUILD_ID}'
+IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${VERSION}-${BUILD_ID}"
+
+# Stop any running container
+docker ps -q --filter "ancestor=$IMAGE" | xargs -r docker stop
+
+# Run the new container
+docker run -d -p 80:80 $IMAGE
+EOF
+
+# Step 3: Create instance template using startup.sh
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    [
+      'compute', 'instance-templates', 'create', 'web-template-$BUILD_ID',
+      '--metadata-from-file', 'startup-script=startup.sh',
+      '--machine-type=e2-micro',
+      '--tags=http-server'
+    ]
 
 # Step 4: Create instance template using startup.sh
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
