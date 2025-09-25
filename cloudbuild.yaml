@@ -111,30 +111,31 @@ steps:
   args:
     - '-c'
     - |
-      # Get deployment environment and MIG name
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+      # Get deployment environment and MIG name from file
+      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
       echo "Giving instances extra time to warm up..."
-      sleep 30  # optional extra buffer
+      sleep 30  # optional buffer
 
       # List all instances in the MIG
-      INSTANCE_LIST=$(gcloud compute instance-groups managed list-instances $MIG_NAME \
-                      --zone=us-central1-a --format="value(instance)")
+      INSTANCE_LIST=$$(gcloud compute instance-groups managed list-instances $$MIG_NAME \
+                        --zone=us-central1-a --format="value(instance)")
 
       # Warm up each instance using internal IP
-      for INSTANCE in $INSTANCE_LIST; do
-        INTERNAL_IP=$(gcloud compute instances describe $INSTANCE \
-                      --zone=us-central1-a \
-                      --format="get(networkInterfaces[0].networkIP)")
-        echo "Warming up instance $INSTANCE at $INTERNAL_IP"
+      for INSTANCE in $$INSTANCE_LIST; do
+        INTERNAL_IP=$$(gcloud compute instances describe $$INSTANCE \
+                        --zone=us-central1-a \
+                        --format="get(networkInterfaces[0].networkIP)")
+        echo "Warming up instance $$INSTANCE at $$INTERNAL_IP"
         for i in {1..5}; do
-          curl -s http://$INTERNAL_IP/health || true
+          curl -s http://$$INTERNAL_IP/health || true
           sleep 2
         done
       done
 
       echo "Warm-up complete ✅"
+
 
 
 # 🔹 New step goes right here
