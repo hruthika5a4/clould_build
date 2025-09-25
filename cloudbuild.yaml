@@ -129,25 +129,25 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
-      echo "🔍 Fetching instances from MIG: $MIG_NAME"
-      INSTANCE=$(gcloud compute instance-groups managed list-instances "$MIG_NAME" \
+      echo "🔍 Fetching instances from MIG: $$MIG_NAME"
+      INSTANCE=$$(gcloud compute instance-groups managed list-instances "$$MIG_NAME" \
                    --zone=us-central1-a --format="value(instance)" | head -n1)
 
-      INSTANCE_IP=$(gcloud compute instances describe "$INSTANCE" \
+      INSTANCE_IP=$$(gcloud compute instances describe "$$INSTANCE" \
                       --zone=us-central1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
 
-      echo "Checking app health at http://$INSTANCE_IP/health"
+      echo "Checking app health at http://$$INSTANCE_IP/health"
 
       for i in {1..30}; do
-        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INSTANCE_IP/health || true)
-        if [ "$STATUS" -eq 200 ]; then
-          echo "✅ Application on $INSTANCE_IP is healthy"
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" http://$$INSTANCE_IP/health || true)
+        if [ "$$STATUS" -eq 200 ]; then
+          echo "✅ Application on $$INSTANCE_IP is healthy"
           exit 0
         fi
-        echo "⚠️ Attempt $i: Got status $STATUS, retrying in 5s..."
+        echo "⚠️ Attempt $$i: Got status $$STATUS, retrying in 5s..."
         sleep 5
       done
 
