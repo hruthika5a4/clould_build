@@ -124,35 +124,44 @@ steps:
 # Step 7.5: Readiness buffer
 # Step 7.5: Readiness buffer + warm-up
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-  id: Warm-up-instances   # <-- unique ID
+  id: Warm-up-instances
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      # Get deployment environment and MIG name from file
       DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
       echo "Giving instances extra time to warm up..."
-      sleep 30  # optional buffer
+      sleep 30  # initial buffer
 
       # List all instances in the MIG
       INSTANCE_LIST=$$(gcloud compute instance-groups managed list-instances $$MIG_NAME \
                         --zone=us-central1-a --format="value(instance)")
 
-      # Warm up each instance using internal IP
       for INSTANCE in $$INSTANCE_LIST; do
         INTERNAL_IP=$$(gcloud compute instances describe $$INSTANCE \
                         --zone=us-central1-a \
                         --format="get(networkInterfaces[0].networkIP)")
-        echo "Warming up instance $$INSTANCE at $$INTERNAL_IP"
+        echo "Waiting for instance $$INSTANCE at $$INTERNAL_IP to become healthy..."
+
+        # Wait until the instance passes the /health endpoint
+        while ! curl -s http://$$INTERNAL_IP/health > /dev/null; do
+          echo "Instance $$INSTANCE not ready yet, retrying in 5s..."
+          sleep 5
+        done
+
+        # Optional: do a few warm-up requests after instance is healthy
+        echo "Warming up instance $$INSTANCE with additional requests..."
         for i in {1..5}; do
           curl -s http://$$INTERNAL_IP/health || true
           sleep 2
         done
+
+        echo "Instance $$INSTANCE ready ✅"
       done
 
-      echo "Warm-up complete ✅"
+      echo "All instances in $$MIG_NAME are healthy and warmed up ✅"
 
 
 # Step 8: Switch traffic
