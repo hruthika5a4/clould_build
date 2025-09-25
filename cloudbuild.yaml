@@ -2,7 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _VERSION: "v1"       # version tag
+  _VERSION: "v1"       # Docker image version tag
 
 steps:
 # Step 1: Detect current active environment and choose deploy target
@@ -14,9 +14,9 @@ steps:
     - |
       set -e
       CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global --format='value(target)')
-      echo "Current forwarding target: $$CURRENT_TARGET"
+      echo "Current forwarding target: $CURRENT_TARGET"
 
-      if [[ "$$CURRENT_TARGET" == *"blue"* ]]; then
+      if [[ "$CURRENT_TARGET" == *"blue"* ]]; then
         DEPLOY_ENV="green"
         MIG_NAME="web-green-mig"
       else
@@ -24,9 +24,9 @@ steps:
         MIG_NAME="web-1-mig"
       fi
 
-      echo "Deploying to environment: $$DEPLOY_ENV"
-      echo "DEPLOY_ENV=$$DEPLOY_ENV" > /workspace/deploy_env.txt
-      echo "MIG_NAME=$$MIG_NAME" >> /workspace/deploy_env.txt
+      echo "Deploying to environment: $DEPLOY_ENV"
+      echo "DEPLOY_ENV=$DEPLOY_ENV" > /workspace/deploy_env.txt
+      echo "MIG_NAME=$MIG_NAME" >> /workspace/deploy_env.txt
 
 # Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
@@ -88,8 +88,6 @@ steps:
         --type=proactive \
         --quiet
 
-
-
 # Step 6: Wait for MIG rollout to complete
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-rollout
@@ -98,12 +96,12 @@ steps:
     - '-c'
     - |
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Waiting for MIG $$MIG_NAME to finish rollout..."
-      gcloud compute instance-groups managed wait-until-stable "$$MIG_NAME" \
+      echo "Waiting for MIG $MIG_NAME to finish rollout..."
+      gcloud compute instance-groups managed wait-until-stable "$MIG_NAME" \
         --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
-## Step 7: Wait until backend is healthy
+# Step 7: Wait until backend is healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-backend
   entrypoint: 'bash'
@@ -111,16 +109,14 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      BACKEND="$${DEPLOY_ENV}-backend"
-      echo "Waiting for backend $$BACKEND to become healthy..."
-      until gcloud compute backend-services get-health "$$BACKEND" --global | grep -q "HEALTHY"; do
+      BACKEND="${DEPLOY_ENV}-backend"
+      echo "Waiting for backend $BACKEND to become healthy..."
+      until gcloud compute backend-services get-health "$BACKEND" --global | grep -q "HEALTHY"; do
         echo "Backend not healthy yet, waiting 10s..."
         sleep 10
       done
-      echo "Backend $$BACKEND healthy ✅"
+      echo "Backend $BACKEND healthy ✅"
 
-# 🔹 New step goes right here
-# Step 7.5: Readiness buffer
 # Step 7.5: Readiness buffer + warm-up
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Warm-up-instances
@@ -128,11 +124,10 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-
+      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
       echo "Giving instances extra time to warm up..."
-      sleep 120  # initial buffer
+      sleep 120
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -142,8 +137,8 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Switching traffic to $$DEPLOY_ENV environment..."
-      if [ "$$DEPLOY_ENV" == "green" ]; then
+      echo "Switching traffic to $DEPLOY_ENV environment..."
+      if [ "$DEPLOY_ENV" == "green" ]; then
         bash ./switch-to-green.sh
       else
         bash ./switch-to-blue.sh
