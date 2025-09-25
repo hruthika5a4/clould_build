@@ -52,7 +52,7 @@ steps:
       echo "Pushing Docker image: $$IMAGE"
       docker push $$IMAGE
 
-# Step 4: Create instance template
+# Step 4: Create instance template using startup.sh
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Create-template
   entrypoint: 'bash'
@@ -61,13 +61,16 @@ steps:
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Creating instance template: $$TEMPLATE_NAME with image $$IMAGE"
-      gcloud beta compute instance-templates create-with-container "$$TEMPLATE_NAME" \
+      echo "Creating instance template: $$TEMPLATE_NAME using startup.sh"
+      gcloud compute instance-templates create "$$TEMPLATE_NAME" \
         --machine-type=e2-small \
-        --container-image="$$IMAGE" \
         --tags=http-server \
+        --metadata=startup-script='#!/bin/bash
+          cd /home/username/app
+          git pull origin main
+          bash startup.sh' \
         --quiet
+
 
 # Step 5: Rolling update MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
