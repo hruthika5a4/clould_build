@@ -70,9 +70,11 @@ steps:
         --tags=http-server \
         --image-family=cos-stable \
         --image-project=cos-cloud \
-        --metadata=startup-script="#!/bin/bash
-docker run -d -p 80:80 \$IMAGE" \
+        --metadata=startup-script=|
+          #!/bin/bash
+          docker run -d -p 80:80 \$IMAGE \
         --quiet
+
 
 # Step 5: Rolling update MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
