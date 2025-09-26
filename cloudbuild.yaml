@@ -59,19 +59,21 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV="${_DEPLOY_ENV}"
-      TEMPLATE_NAME="web-template-${_DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      BUILD_VER="${_VERSION}-$BUILD_ID"
+      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${BUILD_VER}"
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${BUILD_VER}"
 
       echo "Creating instance template: $TEMPLATE_NAME"
+
+      # Replace placeholder in startup.sh dynamically
+      sed "s|__IMAGE__|$IMAGE|g" startup.sh > startup-final.sh
 
       gcloud compute instance-templates create "$TEMPLATE_NAME" \
         --machine-type=e2-small \
         --tags=http-server \
         --image-family=cos-stable \
         --image-project=cos-cloud \
-        --metadata=startup-script=|
-          #!/bin/bash
-          IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${_DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-          docker run -d -p 80:80 \$IMAGE \
+        --metadata-from-file startup-script=startup-final.sh \
         --quiet
 
 
