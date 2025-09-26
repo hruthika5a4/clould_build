@@ -62,11 +62,17 @@ steps:
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Creating instance template: $$TEMPLATE_NAME with image $$IMAGE"
-      gcloud beta compute instance-templates create-with-container "$$TEMPLATE_NAME" \
+
+      echo "Substituting values into startup.sh..."
+      sed "s|\${DEPLOY_ENV}|$DEPLOY_ENV|g; s|\${_VERSION}|${_VERSION}|g; s|\$BUILD_ID|$BUILD_ID|g" startup.sh > startup-final.sh
+
+      echo "Creating instance template: $$TEMPLATE_NAME with startup-final.sh"
+      gcloud compute instance-templates create "$$TEMPLATE_NAME" \
         --machine-type=e2-small \
-        --container-image="$$IMAGE" \
         --tags=http-server \
+        --image-family=cos-stable \
+        --image-project=cos-cloud \
+        --metadata-from-file startup-script=startup-final.sh \
         --quiet
 
 # Step 5: Rolling update MIG
