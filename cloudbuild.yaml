@@ -2,10 +2,10 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _VERSION: "v1"  # only allowed keys
+  _VERSION: "v1"       # version tag
 
 steps:
-# Step 1: Detect environment
+# Step 1: Detect current active environment and choose deploy target
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Detect-active-env
   entrypoint: 'bash'
@@ -14,9 +14,9 @@ steps:
     - |
       set -e
       CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global --format='value(target)')
-      echo "Current target: $CURRENT_TARGET"
+      echo "Current forwarding target: $$CURRENT_TARGET"
 
-      if [[ "$CURRENT_TARGET" == *"blue"* ]]; then
+      if [[ "$$CURRENT_TARGET" == *"blue"* ]]; then
         DEPLOY_ENV="green"
         MIG_NAME="web-green-mig"
       else
@@ -24,10 +24,9 @@ steps:
         MIG_NAME="web-1-mig"
       fi
 
-      echo "Deploying to environment: $DEPLOY_ENV"
-      echo "DEPLOY_ENV=$DEPLOY_ENV" > /workspace/deploy_env.txt
-      echo "MIG_NAME=$MIG_NAME" >> /workspace/deploy_env.txt
-
+      echo "Deploying to environment: $$DEPLOY_ENV"
+      echo "DEPLOY_ENV=$$DEPLOY_ENV" > /workspace/deploy_env.txt
+      echo "MIG_NAME=$$MIG_NAME" >> /workspace/deploy_env.txt
 
 # Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
@@ -36,10 +35,10 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Building Docker image: $IMAGE"
-      docker build -t $IMAGE .
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Building Docker image: $$IMAGE"
+      docker build -t $$IMAGE .
 
 # Step 3: Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
@@ -48,11 +47,12 @@ steps:
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      echo "Pushing Docker image: $IMAGE"
-      docker push $IMAGE
+      DEPLOY_ENV=$(cut -d= -f2 /workspace/deploy_env.txt | head -n1)
+      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Pushing Docker image: $$IMAGE"
+      docker push $$IMAGE
 
+# Step 4: Create instance template
 # Step 4: Create instance template using pushed Docker image
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Create-template
@@ -88,12 +88,10 @@ steps:
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-
-      echo "Starting rolling update on MIG: $MIG_NAME with template $TEMPLATE_NAME"
-
-      gcloud compute instance-groups managed rolling-action start-update "$MIG_NAME" \
-        --version template="$TEMPLATE_NAME" \
+      TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      echo "Starting rolling update on MIG: $$MIG_NAME with template $$TEMPLATE_NAME"
+      gcloud compute instance-groups managed rolling-action start-update "$$MIG_NAME" \
+        --version template="$$TEMPLATE_NAME" \
         --zone=us-central1-a \
         --minimal-action=replace \
         --max-surge=1 \
@@ -101,7 +99,9 @@ steps:
         --type=proactive \
         --quiet
 
-# Step 6: Wait for MIG rollout
+
+
+# Step 6: Wait for MIG rollout to complete
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-rollout
   entrypoint: 'bash'
@@ -109,12 +109,12 @@ steps:
     - '-c'
     - |
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Waiting for MIG $MIG_NAME to finish rollout..."
-      gcloud compute instance-groups managed wait-until-stable "$MIG_NAME" \
+      echo "Waiting for MIG $$MIG_NAME to finish rollout..."
+      gcloud compute instance-groups managed wait-until-stable "$$MIG_NAME" \
         --zone=us-central1-a --timeout=900
       echo "MIG rollout complete ✅"
 
-# Step 7: Wait until backend healthy
+## Step 7: Wait until backend is healthy
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Wait-for-backend
   entrypoint: 'bash'
@@ -122,25 +122,28 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      BACKEND="${DEPLOY_ENV}-backend"
-      echo "Waiting for backend $BACKEND to become healthy..."
-      until gcloud compute backend-services get-health "$BACKEND" --global | grep -q "HEALTHY"; do
+      BACKEND="$${DEPLOY_ENV}-backend"
+      echo "Waiting for backend $$BACKEND to become healthy..."
+      until gcloud compute backend-services get-health "$$BACKEND" --global | grep -q "HEALTHY"; do
         echo "Backend not healthy yet, waiting 10s..."
         sleep 10
       done
-      echo "Backend $BACKEND healthy ✅"
+      echo "Backend $$BACKEND healthy ✅"
 
-# Step 7.5: Warm-up buffer
+# 🔹 New step goes right here
+# Step 7.5: Readiness buffer
+# Step 7.5: Readiness buffer + warm-up
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Warm-up-instances
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+      DEPLOY_ENV=$$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
+      MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
+
       echo "Giving instances extra time to warm up..."
-      sleep 120
+      sleep 120  # initial buffer
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -150,8 +153,8 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      echo "Switching traffic to $DEPLOY_ENV environment..."
-      if [ "$DEPLOY_ENV" == "green" ]; then
+      echo "Switching traffic to $$DEPLOY_ENV environment..."
+      if [ "$$DEPLOY_ENV" == "green" ]; then
         bash ./switch-to-green.sh
       else
         bash ./switch-to-blue.sh
