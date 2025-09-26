@@ -64,7 +64,7 @@ steps:
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
 
       echo "Substituting values into startup.sh..."
-      sed "s|\${DEPLOY_ENV}|$DEPLOY_ENV|g; s|\${_VERSION}|${_VERSION}|g; s|\$BUILD_ID|$BUILD_ID|g" startup.sh > startup-final.sh
+      sed "s|__DEPLOY_ENV__|$DEPLOY_ENV|g; s|__VERSION__|${_VERSION}|g; s|__BUILD_ID__|$BUILD_ID|g" startup.sh > startup-final.sh
 
       echo "Creating instance template: $$TEMPLATE_NAME with startup-final.sh"
       gcloud compute instance-templates create "$$TEMPLATE_NAME" \
