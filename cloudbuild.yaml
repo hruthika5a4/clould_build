@@ -61,12 +61,11 @@ steps:
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
-      IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
 
       echo "Substituting values into startup.sh..."
       sed "s|__DEPLOY_ENV__|$DEPLOY_ENV|g; s|__VERSION__|${_VERSION}|g; s|__BUILD_ID__|$BUILD_ID|g" startup.sh > startup-final.sh
 
-      echo "Creating instance template: $$TEMPLATE_NAME with startup-final.sh"
+      echo "Creating instance template: $$TEMPLATE_NAME"
       gcloud compute instance-templates create "$$TEMPLATE_NAME" \
         --machine-type=e2-small \
         --tags=http-server \
@@ -74,6 +73,7 @@ steps:
         --image-project=cos-cloud \
         --metadata-from-file startup-script=startup-final.sh \
         --quiet
+
 
 # Step 5: Rolling update MIG
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
