@@ -2,10 +2,10 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _VERSION: "v1"  # only allowed substitution
+  _VERSION: "v1"  # only allowed keys
 
 steps:
-# Step 1: Detect current active environment
+# Step 1: Detect environment
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Detect-active-env
   entrypoint: 'bash'
@@ -14,7 +14,7 @@ steps:
     - |
       set -e
       CURRENT_TARGET=$(gcloud compute forwarding-rules describe web-rule --global --format='value(target)')
-      echo "Current forwarding target: $CURRENT_TARGET"
+      echo "Current target: $CURRENT_TARGET"
 
       if [[ "$CURRENT_TARGET" == *"blue"* ]]; then
         DEPLOY_ENV="green"
@@ -25,9 +25,9 @@ steps:
       fi
 
       echo "Deploying to environment: $DEPLOY_ENV"
-      # Save variables for later steps
       echo "DEPLOY_ENV=$DEPLOY_ENV" > /workspace/deploy_env.txt
       echo "MIG_NAME=$MIG_NAME" >> /workspace/deploy_env.txt
+
 
 # Step 2: Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
