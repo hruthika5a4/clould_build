@@ -1,15 +1,6 @@
 #!/bin/bash
 set -e
 
-# --- Install Docker if not present ---
-if ! command -v docker >/dev/null 2>&1; then
-  echo "Installing Docker..."
-  apt-get update -y
-  apt-get install -y docker.io
-  systemctl enable docker
-  systemctl start docker
-fi
-
 # --- Authenticate Docker with GCP Artifact Registry ---
 gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
