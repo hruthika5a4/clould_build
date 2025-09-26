@@ -65,7 +65,7 @@ steps:
       IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:$${DEPLOY_ENV}-$${BUILD_VER}"
       TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
 
-      echo "Creating instance template: $$TEMPLATE_NAME with image $IMAGE"
+      echo "Creating instance template: $$TEMPLATE_NAME with image $$IMAGE"
 
       sed "s|__IMAGE__|$$IMAGE|g" startup.sh > startup-final.sh
 
