@@ -2,7 +2,8 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _VERSION: "v1"       # version tag
+  _DEPLOY_ENV: "green"     # or blue, staging, prod, etc.
+  _VERSION: "v1"     # version tag
 
 steps:
 # Step 1: Detect current active environment and choose deploy target
