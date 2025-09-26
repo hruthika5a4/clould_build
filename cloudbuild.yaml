@@ -5,7 +5,7 @@ substitutions:
   _VERSION: "v1"  # only allowed keys
 
 steps:
-# Step 1: Detect environment
+# Step 1: Detect current active environment and choose deploy target
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
   id: Detect-active-env
   entrypoint: 'bash'
@@ -66,6 +66,7 @@ steps:
 
       echo "Creating instance template: $$TEMPLATE_NAME"
 
+      # Replace placeholders in startup.sh
       sed "s|__DEPLOY_ENV__|$DEPLOY_ENV|g; s|__VERSION__|${_VERSION}|g; s|__BUILD_ID__|$BUILD_ID|g" startup.sh > startup-final.sh
 
       gcloud compute instance-templates create "$$TEMPLATE_NAME" \
@@ -85,7 +86,7 @@ steps:
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       MIG_NAME=$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
-      TEMPLATE_NAME="web-template-$${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
+      TEMPLATE_NAME="web-template-${DEPLOY_ENV}-${_VERSION}-$BUILD_ID"
       echo "Starting rolling update on MIG: $$MIG_NAME with template $$TEMPLATE_NAME"
       gcloud compute instance-groups managed rolling-action start-update "$$MIG_NAME" \
         --version template="$$TEMPLATE_NAME" \
@@ -117,7 +118,7 @@ steps:
     - '-c'
     - |
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
-      BACKEND="$${DEPLOY_ENV}-backend"
+      BACKEND="${DEPLOY_ENV}-backend"
       echo "Waiting for backend $$BACKEND to become healthy..."
       until gcloud compute backend-services get-health "$$BACKEND" --global | grep -q "HEALTHY"; do
         echo "Backend not healthy yet, waiting 10s..."
