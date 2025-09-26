@@ -67,7 +67,7 @@ steps:
       echo "Creating instance template: $$TEMPLATE_NAME with image $$IMAGE"
 
       # Replace placeholders in startup.sh with the pushed image
-      sed "s|__IMAGE__|$IMAGE|g" startup.sh > startup-final.sh
+      sed "s|__IMAGE__|$$IMAGE|g" startup.sh > startup-final.sh
 
       # Create instance template
       gcloud compute instance-templates create "$$TEMPLATE_NAME" \
