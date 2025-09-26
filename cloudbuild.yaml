@@ -176,7 +176,7 @@ steps:
       DEPLOY_ENV=$(grep DEPLOY_ENV /workspace/deploy_env.txt | cut -d= -f2)
       echo "Giving instances extra time to warm up..."
       sleep 30  # initial buffer
-      if [ "$DEPLOY_ENV" == "green" ]; then
+      if [ "$$DEPLOY_ENV" == "green" ]; then
         OLD_MIG="web-1-mig"
       else
         OLD_MIG="web-green-mig"
