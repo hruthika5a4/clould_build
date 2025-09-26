@@ -147,7 +147,7 @@ steps:
       MIG_NAME=$$(grep MIG_NAME /workspace/deploy_env.txt | cut -d= -f2)
 
       echo "Giving instances extra time to warm up..."
-      sleep 120  # initial buffer
+      sleep 30  # initial buffer
 
 # Step 8: Switch traffic
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
