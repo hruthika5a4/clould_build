@@ -1,5 +1,4 @@
 #!/bin/bash
-apt-get update
-apt-get install -y apache2
-echo "<h1>Hello from MIG v$(date +%s) instance $(hostname)</h1>" > /var/www/html/index.html
-systemctl restart apache2
+IMAGE="us-central1-docker.pkg.dev/singular-object-464504-a3/artifact-repo/static-web:${DEPLOY_ENV}-${_VERSION}-${BUILD_ID}"
+echo "Starting container: $IMAGE"
+docker run -d -p 80:80 $IMAGE
