@@ -5,6 +5,7 @@ substitutions:
   _VERSION: "v1"
   _DEPLOY_ENV: "green"
 
+
 steps:
 # Step 1: Detect current active environment and choose deploy target
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
